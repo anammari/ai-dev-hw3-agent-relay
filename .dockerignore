@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+*.db
+*.db-shm
+*.db-wal
+*credentials.json
+test_agent_relay.py
+README.md
+SPEC.md
+.dockerignore

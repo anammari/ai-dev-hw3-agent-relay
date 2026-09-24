@@ -43,6 +43,51 @@ def register(client: TestClient, name: str) -> tuple[dict, dict[str, str]]:
     return data, {"Authorization": f"Bearer {data['token']}"}
 
 
+def test_acceptance_register_send_claim_complete_result():
+    # SPEC acceptance scenario 1: register two agents, one sends a task, the
+    # other claims and completes it, the sender reads the result.
+    with TestClient(main.app) as client:
+        sender, sender_headers = register(client, "alice")
+        recipient, recipient_headers = register(client, "uppercase")
+
+        sent = client.post(
+            "/api/v1/tasks",
+            headers=sender_headers,
+            json={"to": recipient["agent_id"], "input": "hello world"},
+        )
+        assert sent.status_code == 201
+        assert sent.json()["status"] == "queued"
+        task_id = sent.json()["task_id"]
+
+        queued = client.get(f"/api/v1/tasks/{task_id}", headers=sender_headers).json()
+        assert queued["status"] == "queued"
+        assert queued["output"] is None
+        assert queued["finished_at"] is None
+
+        claim = client.post(
+            "/api/v1/tasks/claim",
+            headers=recipient_headers,
+            json={"worker_id": "laptop-1", "wait_seconds": 0},
+        )
+        assert claim.status_code == 200
+        claimed = claim.json()
+        assert claimed["task_id"] == task_id
+        assert claimed["input"] == "hello world"
+        assert claimed["attempt"] == 1
+
+        done = client.post(
+            f"/api/v1/tasks/{task_id}/complete",
+            headers=recipient_headers,
+            json={"claim_token": claimed["claim_token"], "output": "HELLO WORLD"},
+        )
+        assert done.status_code == 200
+        assert done.json()["status"] == "completed"
+
+        final = client.get(f"/api/v1/tasks/{task_id}", headers=sender_headers).json()
+        assert final["status"] == "completed"
+        assert final["output"] == "HELLO WORLD"
+
+
 def test_protocol_idempotency_terminal_retry_and_auth_boundary():
     with TestClient(main.app) as client:
         sender, sender_headers = register(client, "sender")
