@@ -143,6 +143,10 @@ def test_protocol_idempotency_terminal_retry_and_auth_boundary():
         assert "claim_token" not in attempts["items"][0]
 
 
+@pytest.mark.skipif(
+    engine.url.get_backend_name() != "sqlite",
+    reason="atomic BEGIN IMMEDIATE claim guarantee exists only on the SQLite starter",
+)
 def test_sqlite_atomic_claims_distribute_without_overlap():
     with TestClient(main.app) as client:
         _sender, sender_headers = register(client, "sender")
