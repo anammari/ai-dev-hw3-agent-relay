@@ -37,10 +37,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Install uv in a plain step: avoids setup-uv's node-based post cache action,
+      # which act's runner image can't execute (fails with exitcode 127).
       - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          cache: false # act's runner image can't run setup-uv's node-based post cache step
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: uv sync --frozen
