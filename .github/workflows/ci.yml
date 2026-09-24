@@ -86,24 +86,42 @@ jobs:
             printf '%s' "$KUBECONFIG_FILE" > "$HOME/.kube/config"
           fi
 
+      # Deploy works only where a kind cluster actually exists: act against your
+      # local cluster, or a self-hosted runner. On GitHub's hosted runners there
+      # is no kind cluster, so these steps are skipped (CI = test + build green,
+      # CD stays available for act/local).
+      - name: Detect kind cluster
+        id: cluster
+        run: |
+          if kind get clusters 2>/dev/null | grep -qx "kind"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Load image into kind
+        if: steps.cluster.outputs.exists == 'true'
         run: kind load docker-image "$IMAGE_TAG" --name kind
 
       - name: Deploy PostgreSQL
+        if: steps.cluster.outputs.exists == 'true'
         run: kubectl apply -f k8s/postgres.yaml
 
       - name: Deploy application
+        if: steps.cluster.outputs.exists == 'true'
         run: |
           kubectl apply -f k8s/app.yaml
           kubectl set image deployment/agent-relay agent-relay="$IMAGE_TAG"
           kubectl rollout status deployment/agent-relay --timeout=180s
 
       - name: Verify deployment
+        if: steps.cluster.outputs.exists == 'true'
         run: |
           kubectl get pods -l app=agent-relay
           kubectl get pods -l app=postgres
 
       - name: Verify heading in deployed dashboard
+        if: steps.cluster.outputs.exists == 'true'
         run: |
           kubectl port-forward svc/agent-relay 8000:8000 >/tmp/pf.log 2>&1 &
           PF=$!
